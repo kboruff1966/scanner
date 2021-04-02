@@ -69,6 +69,25 @@ fn skip(src: &str) -> usize {
     }
 }
 
+fn tokenize_identifier(input: &str) -> Result<(Kind, usize), String> {
+    match input.chars().next() {
+        Some(c) if c != '_' && !c.is_ascii_alphabetic() => {
+            return Err("malformed identifier".to_string())
+        }
+        None => return Ok((Kind::EndOfFile, 0)),
+        _ => (),
+    }
+
+    let identifier: String = input
+        .chars()
+        .take_while(|ch| *ch == '_' || ch.is_ascii_alphanumeric())
+        .collect();
+
+    let bytes_read = identifier.len();
+
+    Ok((Kind::Identifier(identifier), bytes_read))
+}
+
 fn next_token(src: &str) -> Result<(Kind, usize), String> {
     let cursor = skip(src);
     let remaining = &src[cursor..];
@@ -89,22 +108,6 @@ fn next_token(src: &str) -> Result<(Kind, usize), String> {
     };
 
     Ok((kind, length + cursor))
-}
-
-fn tokenize_identifier(input: &str) -> Result<(Kind, usize), String> {
-    match input.chars().next() {
-        Some(c) if c != '_' && !c.is_ascii_alphabetic() => return Err("bad identifier".to_string()),
-        None => return Err("end of file".to_string()),
-        _ => (),
-    }
-
-    let identifier: String = input
-        .chars()
-        .take_while(|ch| *ch == '_' || ch.is_ascii_alphanumeric())
-        .collect();
-
-    let bytes_read = identifier.len();
-    Ok((Kind::Identifier(identifier), bytes_read))
 }
 
 // fn tokenize_number(input: &str) -> Result<(Kind, usize), String> {
@@ -183,26 +186,27 @@ mod tests {
     //     let result = tokenize_number(data);
     // }
 
-    // #[test]
+    #[test]
     fn tokenize_identifier_test() {
-        let identifier = "A=";
-        let result = tokenize_identifier(identifier);
+        // degenerate case
+        let src = "";
+        let result = tokenize_identifier(src);
+        assert_eq!(Ok((Kind::EndOfFile, 0)), result);
 
-        assert!(result.is_ok());
-        // let (tok, bytes_read) = result.unwrap();
-        // assert_eq!(Kind::Identifier("someIdentifier".to_string()), tok);
-        // assert_eq!(bytes_read, 15);
+        // test malformed identifier
+        let src = "10ten";
+        let result = tokenize_identifier(src);
+        assert!(result.is_err());
 
-        // let identifier = "_someId10";
-        // let result = tokenize_identifier(identifier);
-        // let (tok, bytes_read) = result.unwrap();
-        // assert_eq!(Kind::Identifier("_someId10".to_string()), tok);
-        // assert_eq!(bytes_read, identifier.len() + 1);
+        // another malformed case
+        let src = "     someID";
+        let result = tokenize_identifier(src);
+        assert!(result.is_err());
 
-        // // bad identifier
-        // let identifier = "10someId10";
-        // let result = tokenize_identifier(identifier);
-        // assert!(result.is_err());
+        // scans good part of identifier
+        let src = "test@1234";
+        let result = tokenize_identifier(src);
+        assert_eq!(Ok((Kind::Identifier("test".to_string()), 4)), result);
     }
 
     // #[test]
