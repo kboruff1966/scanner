@@ -116,11 +116,20 @@ mod tests {
 
     use super::*;
 
-    // #[test]
+    #[test]
     fn skip_test() {
-        let src = "              // this is a comment\nthis is not a comment";
+        let src = "              // this is a comment\n\n\n\nthis is not a comment";
         let index = skip(src);
+        assert_eq!(index, 38);
         assert_eq!("this is not a comment", &src[index..]);
+
+        let src = "";
+        let index = skip(src);
+        assert_eq!(0, index);
+
+        let src = "// this is some comment\n            this is the text that is left";
+        let index = skip(src);
+        assert_eq!("this is the text that is left", &src[index..]);
     }
 
     #[test]
