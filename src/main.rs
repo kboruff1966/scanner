@@ -15,8 +15,25 @@ fn main() {
     println!("{}", x);
 }
 
+// TOKEN_AND, TOKEN_CLASS, TOKEN_ELSE, TOKEN_FALSE,
+//   TOKEN_FOR, TOKEN_FUN, TOKEN_IF, TOKEN_NIL, TOKEN_OR,
+//   TOKEN_PRINT, TOKEN_RETURN, TOKEN_SUPER, TOKEN_THIS,
+//   TOKEN_TRUE, TOKEN_VAR, TOKEN_WHILE,
+
 #[derive(Debug, PartialEq)]
 enum Kind {
+    // Keywords
+    Class,
+    Else,
+    False,
+    For,
+    If,
+    Nil,
+    Return,
+    True,
+    Var,
+    While,
+
     Number(f64),
     Identifier(String),
     Equals,
@@ -73,14 +90,6 @@ fn skip(src: &str) -> usize {
 }
 
 fn tokenize_identifier(input: &str) -> Result<(Kind, usize), String> {
-    match input.chars().next() {
-        Some(c) if c != '_' && !c.is_ascii_alphabetic() => {
-            return Err("malformed identifier".to_string())
-        }
-        None => return Ok((Kind::EndOfFile, 0)),
-        _ => (),
-    }
-
     let identifier: String = input
         .chars()
         .take_while(|ch| *ch == '_' || ch.is_ascii_alphanumeric())
@@ -88,7 +97,13 @@ fn tokenize_identifier(input: &str) -> Result<(Kind, usize), String> {
 
     let bytes_read = identifier.len();
 
-    Ok((Kind::Identifier(identifier), bytes_read))
+    let result = if bytes_read == 0 {
+        (Kind::Error("No identifier tokenized".to_string()), 0)
+    } else {
+        (Kind::Identifier(identifier), bytes_read)
+    };
+
+    Ok(result)
 }
 
 use std::error::Error;
@@ -115,6 +130,10 @@ fn tokenize_number(input: &str) -> Result<(Kind, usize), Box<dyn Error>> {
     Ok((Kind::Number(number), bytes_read))
 }
 
+fn check_for_keyword(src: &str, rest: &str, token: Kind) -> Result<(Kind, usize), Box<dyn Error>> {
+    Ok((Kind::Identifier("woohoo".to_string()), 6))
+}
+
 fn next_token(src: &str) -> Result<(Kind, usize), Box<dyn Error>> {
     let cursor = skip(src);
     let remaining = &src[cursor..];
@@ -129,6 +148,17 @@ fn next_token(src: &str) -> Result<(Kind, usize), Box<dyn Error>> {
         '+' => (Kind::Plus, 1),
         '-' => (Kind::Minus, 1),
         ';' => (Kind::Semicolon, 1),
+
+        // check for keywords
+        'c' => check_for_keyword(remaining, "class", Kind::Class)?,
+        'e' => check_for_keyword(remaining, "else", Kind::Else)?,
+        'i' => check_for_keyword(remaining, "if", Kind::If)?,
+        'n' => check_for_keyword(remaining, "nil", Kind::Nil)?,
+        'r' => check_for_keyword(remaining, "return", Kind::Return)?,
+        't' => check_for_keyword(remaining, "true", Kind::True)?,
+        'v' => check_for_keyword(remaining, "var", Kind::Var)?,
+        'w' => check_for_keyword(remaining, "while", Kind::While)?,
+
         ch @ '_' | ch if ch == '_' || ch.is_ascii_alphabetic() => tokenize_identifier(remaining)?,
         d @ '.' | d if d == '.' || d.is_ascii_digit() => tokenize_number(remaining)?,
         other => (Kind::Error(format!("unknown character '{}'", other)), 1),
@@ -235,17 +265,17 @@ mod tests {
         // degenerate case
         let src = "";
         let result = tokenize_identifier(src);
-        assert_eq!(Ok((Kind::EndOfFile, 0)), result);
+        assert!(result.is_ok());
 
         // test malformed identifier
         let src = "10ten";
         let result = tokenize_identifier(src);
-        assert!(result.is_err());
+        assert!(result.is_ok());
 
         // another malformed case
         let src = "     someID";
         let result = tokenize_identifier(src);
-        assert!(result.is_err());
+        assert!(result.is_ok());
 
         // scans good part of identifier
         let src = "test@1234";
