@@ -1,21 +1,23 @@
 fn main() {
-    let src = "A=B+C;   // this is a comment   \nSomeIdentifier\n";
-    let mut remaining = src;
+    // let src = "A=B+C;   // this is a comment   \nSomeIdentifier\n";
+    // let mut remaining = src;
 
-    while remaining.len() != 0 {
-        let result = next_token(remaining);
-        println!("{:?}", result);
-        if let Ok(x) = result {
-            remaining = &remaining[(x.1)..];
-            println!("`{}`", remaining);
-        }
-    }
+    // while remaining.len() != 0 {
+    //     let result = next_token(remaining);
+    //     println!("{:?}", result);
+    //     if let Ok(x) = result {
+    //         remaining = &remaining[(x.1)..];
+    //         println!("`{}`", remaining);
+    //     }
+    // }
+
+    let x = 0123;
+    println!("{}", x);
 }
 
 #[derive(Debug, PartialEq)]
 enum Kind {
-    Integer(i32),
-    // Float(f64),
+    Number(f64),
     Identifier(String),
     Equals,
     Plus,
@@ -88,6 +90,39 @@ fn tokenize_identifier(input: &str) -> Result<(Kind, usize), String> {
     Ok((Kind::Identifier(identifier), bytes_read))
 }
 
+fn tokenize_number(input: &str) -> Result<(Kind, usize), String> {
+    match input.chars().next() {
+        Some(c) if c != '.' && !c.is_ascii_digit() => {
+            return Err("malformed number literal".to_string())
+        }
+        None => return Ok((Kind::EndOfFile, 0)),
+        _ => (),
+    }
+
+    let mut number: String = input.chars().take_while(|ch| ch.is_ascii_digit()).collect();
+    let bytes_read = number.len();
+
+    // did we hit a decimal? If so, collect fractional number
+    if let Some('.') = input.chars().nth(bytes_read) {
+        let frac_number: String = input
+            .chars()
+            .skip(bytes_read + 1)
+            .take_while(|ch| ch.is_ascii_digit())
+            .collect();
+
+        number.push('.');
+        number.push_str(&frac_number);
+    }
+
+    // turn the number string into a number
+    let bytes_read = number.len();
+    let number: f64 = number
+        .parse()
+        .expect(&format!("unable to convert `{}`to number", number));
+
+    Ok((Kind::Number(number), bytes_read))
+}
+
 fn next_token(src: &str) -> Result<(Kind, usize), String> {
     let cursor = skip(src);
     let remaining = &src[cursor..];
@@ -103,16 +138,12 @@ fn next_token(src: &str) -> Result<(Kind, usize), String> {
         '-' => (Kind::Minus, 1),
         ';' => (Kind::Semicolon, 1),
         c @ '_' | c if c == '_' || c.is_ascii_alphabetic() => tokenize_identifier(remaining)?,
-        '0'..='9' => (Kind::Integer(45), 1),
+        '0'..='9' => (Kind::Number(45.0), 1),
         other => return Err(format!("Unknown character '{}'", other)),
     };
 
     Ok((kind, length + cursor))
 }
-
-// fn tokenize_number(input: &str) -> Result<(Kind, usize), String> {
-//     Ok((Kind::Integer(45), 2))
-// }
 
 #[cfg(test)]
 mod tests {
@@ -180,11 +211,20 @@ mod tests {
         assert_eq!(skipped, 6);
     }
 
-    // #[test]
-    // fn tokenize_number_test() {
-    //     let data = "45";
-    //     let result = tokenize_number(data);
-    // }
+    #[test]
+    fn tokenize_number_test() {
+        let data = "45.55";
+        let result = tokenize_number(data);
+        assert!(result.is_ok());
+
+        let data = "45";
+        let result = tokenize_number(data);
+        assert!(result.is_ok());
+
+        let data = ".3456";
+        let result = tokenize_number(data);
+        assert!(result.is_ok());
+    }
 
     #[test]
     fn tokenize_identifier_test() {
