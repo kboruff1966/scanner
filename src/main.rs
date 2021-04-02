@@ -24,6 +24,7 @@ enum Kind {
     Minus,
     Semicolon,
     EndOfFile,
+    Error(String),
 }
 
 fn skip_whitespace(src: &str) -> usize {
@@ -90,19 +91,13 @@ fn tokenize_identifier(input: &str) -> Result<(Kind, usize), String> {
     Ok((Kind::Identifier(identifier), bytes_read))
 }
 
-fn tokenize_number(input: &str) -> Result<(Kind, usize), String> {
-    match input.chars().next() {
-        Some(c) if c != '.' && !c.is_ascii_digit() => {
-            return Err("malformed number literal".to_string())
-        }
-        None => return Ok((Kind::EndOfFile, 0)),
-        _ => (),
-    }
+use std::error::Error;
 
+fn tokenize_number(input: &str) -> Result<(Kind, usize), Box<dyn Error>> {
     let mut number: String = input.chars().take_while(|ch| ch.is_ascii_digit()).collect();
     let bytes_read = number.len();
 
-    // did we hit a decimal? If so, collect fractional number
+    // did we stop at a decimal? If so, collect fractional number
     if let Some('.') = input.chars().nth(bytes_read) {
         let frac_number: String = input
             .chars()
@@ -114,16 +109,13 @@ fn tokenize_number(input: &str) -> Result<(Kind, usize), String> {
         number.push_str(&frac_number);
     }
 
-    // turn the number string into a number
     let bytes_read = number.len();
-    let number: f64 = number
-        .parse()
-        .expect(&format!("unable to convert `{}`to number", number));
+    let number: f64 = number.parse()?;
 
     Ok((Kind::Number(number), bytes_read))
 }
 
-fn next_token(src: &str) -> Result<(Kind, usize), String> {
+fn next_token(src: &str) -> Result<(Kind, usize), Box<dyn Error>> {
     let cursor = skip(src);
     let remaining = &src[cursor..];
 
@@ -137,9 +129,9 @@ fn next_token(src: &str) -> Result<(Kind, usize), String> {
         '+' => (Kind::Plus, 1),
         '-' => (Kind::Minus, 1),
         ';' => (Kind::Semicolon, 1),
-        c @ '_' | c if c == '_' || c.is_ascii_alphabetic() => tokenize_identifier(remaining)?,
-        '0'..='9' => (Kind::Number(45.0), 1),
-        other => return Err(format!("Unknown character '{}'", other)),
+        ch @ '_' | ch if ch == '_' || ch.is_ascii_alphabetic() => tokenize_identifier(remaining)?,
+        d @ '.' | d if d == '.' || d.is_ascii_digit() => tokenize_number(remaining)?,
+        other => (Kind::Error(format!("unknown character '{}'", other)), 1),
     };
 
     Ok((kind, length + cursor))
@@ -224,6 +216,18 @@ mod tests {
         let data = ".3456";
         let result = tokenize_number(data);
         assert!(result.is_ok());
+
+        let data = "45 + 34";
+        let result = tokenize_number(data);
+        assert!(result.is_ok());
+
+        let data = "";
+        let result = tokenize_number(data);
+        assert!(result.is_err());
+
+        let data = "keith";
+        let result = tokenize_number(data);
+        assert!(result.is_err());
     }
 
     #[test]
