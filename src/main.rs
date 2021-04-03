@@ -15,11 +15,6 @@ fn main() {
     println!("{}", x);
 }
 
-// TOKEN_AND, TOKEN_CLASS, TOKEN_ELSE, TOKEN_FALSE,
-//   TOKEN_FOR, TOKEN_FUN, TOKEN_IF, TOKEN_NIL, TOKEN_OR,
-//   TOKEN_PRINT, TOKEN_RETURN, TOKEN_SUPER, TOKEN_THIS,
-//   TOKEN_TRUE, TOKEN_VAR, TOKEN_WHILE,
-
 use std::error::Error;
 
 #[derive(Debug, PartialEq)]
@@ -96,22 +91,22 @@ fn skip(src: &str) -> usize {
     }
 }
 
-fn check_for_keyword(
-    src: &str,
-    keyword: &str,
-    token: TokenKind,
-) -> Result<(TokenKind, usize), Box<dyn Error>> {
-    let k: String = src
-        .chars()
-        .take_while(|ch| ch.is_ascii_alphabetic())
-        .collect();
+// fn check_for_keyword(
+//     src: &str,
+//     keyword: &str,
+//     token: TokenKind,
+// ) -> Result<(TokenKind, usize), Box<dyn Error>> {
+//     let k: String = src
+//         .chars()
+//         .take_while(|ch| ch.is_ascii_alphabetic())
+//         .collect();
 
-    if k.eq(keyword) {
-        Ok((token, keyword.len()))
-    } else {
-        tokenize_identifier(src)
-    }
-}
+//     if k.eq(keyword) {
+//         Ok((token, keyword.len()))
+//     } else {
+//         tokenize_identifier(src)
+//     }
+// }
 
 fn tokenize_identifier(input: &str) -> Result<(TokenKind, usize), Box<dyn Error>> {
     let identifier: String = input
@@ -163,6 +158,23 @@ fn next_token(src: &str) -> Result<(TokenKind, usize), Box<dyn Error>> {
         Some(x) => x,
         None => return Ok((TokenKind::EndOfFile, skipped_bytes)),
     };
+
+    fn check_for_keyword(
+        src: &str,
+        keyword: &str,
+        token: TokenKind,
+    ) -> Result<(TokenKind, usize), Box<dyn Error>> {
+        let k: String = src
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphabetic())
+            .collect();
+
+        if k.eq(keyword) {
+            Ok((token, keyword.len()))
+        } else {
+            tokenize_identifier(src)
+        }
+    }
 
     let mut relops_match = |true_token: TokenKind, false_token: TokenKind| -> (TokenKind, usize) {
         if let Some('=') = iterator.next() {
@@ -335,6 +347,38 @@ mod tests {
         let data = "keith";
         let result = tokenize_number(data);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn keyword_test() {
+        let expected_tokens = [
+            TokenKind::Class,
+            TokenKind::Else,
+            TokenKind::If,
+            TokenKind::Nil,
+            TokenKind::Return,
+            TokenKind::True,
+            TokenKind::Var,
+            TokenKind::While,
+        ];
+
+        let mut src = "class else if nil return true var while";
+
+        for token in expected_tokens.iter() {}
+
+        for curr_token in expected_tokens.iter() {
+            let result = next_token(src);
+            assert!(result.is_ok());
+            let (token, bytes) = result.unwrap();
+
+            // println!(
+            //     "token: {:?}, curr_token: {:?}, bytes read: {}",
+            //     token, *curr_token, bytes
+            // );
+
+            assert_eq!(token, *curr_token);
+            src = &src[bytes..];
+        }
     }
 
     #[test]
