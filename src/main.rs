@@ -20,6 +20,8 @@ fn main() {
 //   TOKEN_PRINT, TOKEN_RETURN, TOKEN_SUPER, TOKEN_THIS,
 //   TOKEN_TRUE, TOKEN_VAR, TOKEN_WHILE,
 
+use std::error::Error;
+
 #[derive(Debug, PartialEq)]
 enum Kind {
     // Keywords
@@ -56,20 +58,14 @@ fn skip_whitespace(src: &str) -> usize {
 }
 
 fn skip_comment(src: &str) -> usize {
-    if !src.starts_with("//") {
-        return 0;
-    }
-
-    let bytes = match src.char_indices().take_while(|ch| ch.1 != '\n').last() {
-        Some(x) => x.0 + 1,
-        None => 0,
-    };
-
-    // scan past closing newline if exists
-    if let Some('\n') = &src[bytes..].chars().next() {
-        bytes + 1
+    if src.starts_with("//") {
+        if let Some(x) = src.find('\n') {
+            x + 1
+        } else {
+            src.len()
+        }
     } else {
-        bytes
+        0
     }
 }
 
@@ -89,7 +85,24 @@ fn skip(src: &str) -> usize {
     }
 }
 
-fn tokenize_identifier(input: &str) -> Result<(Kind, usize), String> {
+fn check_for_keyword(
+    src: &str,
+    keyword: &str,
+    token: Kind,
+) -> Result<(Kind, usize), Box<dyn Error>> {
+    let k: String = src
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphabetic())
+        .collect();
+
+    if k.eq(keyword) {
+        Ok((token, keyword.len()))
+    } else {
+        tokenize_identifier(src)
+    }
+}
+
+fn tokenize_identifier(input: &str) -> Result<(Kind, usize), Box<dyn Error>> {
     let identifier: String = input
         .chars()
         .take_while(|ch| *ch == '_' || ch.is_ascii_alphanumeric())
@@ -99,14 +112,14 @@ fn tokenize_identifier(input: &str) -> Result<(Kind, usize), String> {
 
     let result = if bytes_read == 0 {
         (Kind::Error("No identifier tokenized".to_string()), 0)
+    } else if identifier.starts_with(|ch: char| ch != '_' && !ch.is_ascii_alphabetic()) {
+        (Kind::Error("malformed identifier".to_string()), 0)
     } else {
         (Kind::Identifier(identifier), bytes_read)
     };
 
     Ok(result)
 }
-
-use std::error::Error;
 
 fn tokenize_number(input: &str) -> Result<(Kind, usize), Box<dyn Error>> {
     let mut number: String = input.chars().take_while(|ch| ch.is_ascii_digit()).collect();
@@ -128,10 +141,6 @@ fn tokenize_number(input: &str) -> Result<(Kind, usize), Box<dyn Error>> {
     let number: f64 = number.parse()?;
 
     Ok((Kind::Number(number), bytes_read))
-}
-
-fn check_for_keyword(src: &str, rest: &str, token: Kind) -> Result<(Kind, usize), Box<dyn Error>> {
-    Ok((Kind::Identifier("woohoo".to_string()), 6))
 }
 
 fn next_token(src: &str) -> Result<(Kind, usize), Box<dyn Error>> {
@@ -159,9 +168,8 @@ fn next_token(src: &str) -> Result<(Kind, usize), Box<dyn Error>> {
         'v' => check_for_keyword(remaining, "var", Kind::Var)?,
         'w' => check_for_keyword(remaining, "while", Kind::While)?,
 
-        ch @ '_' | ch if ch == '_' || ch.is_ascii_alphabetic() => tokenize_identifier(remaining)?,
         d @ '.' | d if d == '.' || d.is_ascii_digit() => tokenize_number(remaining)?,
-        other => (Kind::Error(format!("unknown character '{}'", other)), 1),
+        _ => tokenize_identifier(remaining)?,
     };
 
     Ok((kind, length + cursor))
@@ -210,6 +218,16 @@ mod tests {
         let comment = "this is not a comment at all";
         let skipped = skip_comment(comment);
         assert_eq!(skipped, 0);
+
+        // no new line exists
+        let comment = "// this is a comment without a newline at the end";
+        let skipped = skip_comment(comment);
+        assert_eq!(skipped, comment.len());
+
+        // regular comment
+        let comment = "// this is a comment\n\n\nthis is not a comment";
+        let skipped = skip_comment(comment);
+        assert_eq!(&comment[..skipped], "// this is a comment\n");
     }
 
     #[test]
@@ -266,21 +284,20 @@ mod tests {
         let src = "";
         let result = tokenize_identifier(src);
         assert!(result.is_ok());
+        let (token, _) = result.unwrap();
+        assert_eq!(Kind::Error("No identifier tokenized".to_string()), token);
 
         // test malformed identifier
         let src = "10ten";
         let result = tokenize_identifier(src);
         assert!(result.is_ok());
-
-        // another malformed case
-        let src = "     someID";
-        let result = tokenize_identifier(src);
-        assert!(result.is_ok());
+        let (token, _) = result.unwrap();
+        assert_eq!(Kind::Error("malformed identifier".to_string()), token);
 
         // scans good part of identifier
         let src = "test@1234";
         let result = tokenize_identifier(src);
-        assert_eq!(Ok((Kind::Identifier("test".to_string()), 4)), result);
+        assert!(result.is_ok());
     }
 
     // #[test]
