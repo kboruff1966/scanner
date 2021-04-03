@@ -211,70 +211,32 @@ mod tests {
     #[test]
     fn relops_test() {
         // check the relops_match closure within next_token
-        let src = "< <= > >= = == ! !=";
+        let expected_tokens = [
+            TokenKind::Less,
+            TokenKind::LessEqual,
+            TokenKind::Greater,
+            TokenKind::GreaterEqual,
+            TokenKind::Equal,
+            TokenKind::EqualEqual,
+            TokenKind::Bang,
+            TokenKind::BangEqual,
+        ];
 
-        // check less than
-        let result = next_token(src);
-        assert!(result.is_ok());
-        let (token, bytes) = result.unwrap();
-        assert_eq!(token, TokenKind::Less);
-        assert_eq!(bytes, 1);
+        let mut src = "< <= > >= = == ! !=";
 
-        // check less than or equal
-        let src = &src[bytes..];
-        let result = next_token(src);
-        assert!(result.is_ok());
-        let (token, bytes) = result.unwrap();
-        assert_eq!(token, TokenKind::LessEqual);
-        assert_eq!(bytes, 3);
+        for curr_token in expected_tokens.iter() {
+            let result = next_token(src);
+            assert!(result.is_ok());
+            let (token, bytes) = result.unwrap();
 
-        // check greater than
-        let src = &src[bytes..];
-        let result = next_token(src);
-        assert!(result.is_ok());
-        let (token, bytes) = result.unwrap();
-        assert_eq!(token, TokenKind::Greater);
-        assert_eq!(bytes, 2);
+            // println!(
+            //     "token: {:?}, curr_token: {:?}, bytes read: {}",
+            //     token, *curr_token, bytes
+            // );
 
-        // check greater than equal
-        let src = &src[bytes..];
-        let result = next_token(src);
-        assert!(result.is_ok());
-        let (token, bytes) = result.unwrap();
-        assert_eq!(token, TokenKind::GreaterEqual);
-        assert_eq!(bytes, 3);
-
-        // check equal
-        let src = &src[bytes..];
-        let result = next_token(src);
-        assert!(result.is_ok());
-        let (token, bytes) = result.unwrap();
-        assert_eq!(token, TokenKind::Equal);
-        assert_eq!(bytes, 2);
-
-        // check equal equal
-        let src = &src[bytes..];
-        let result = next_token(src);
-        assert!(result.is_ok());
-        let (token, bytes) = result.unwrap();
-        assert_eq!(token, TokenKind::EqualEqual);
-        assert_eq!(bytes, 3);
-
-        // check bang
-        let src = &src[bytes..];
-        let result = next_token(src);
-        assert!(result.is_ok());
-        let (token, bytes) = result.unwrap();
-        assert_eq!(token, TokenKind::Bang);
-        assert_eq!(bytes, 2);
-
-        // check bang equal.. not equal
-        let src = &src[bytes..];
-        let result = next_token(src);
-        assert!(result.is_ok());
-        let (token, bytes) = result.unwrap();
-        assert_eq!(token, TokenKind::BangEqual);
-        assert_eq!(bytes, 3);
+            assert_eq!(token, *curr_token);
+            src = &src[bytes..];
+        }
     }
 
     #[test]
@@ -400,7 +362,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // #[test]
+    #[test]
     fn next_token_test() {
         let src = "C=A+B;  // this is a comment\n_someValue = 30;";
         let remaining = src;
