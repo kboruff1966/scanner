@@ -23,7 +23,7 @@ fn main() {
 use std::error::Error;
 
 #[derive(Debug, PartialEq)]
-enum Kind {
+enum TokenKind {
     // Keywords
     Class,
     Else,
@@ -36,9 +36,17 @@ enum Kind {
     Var,
     While,
 
+    Equal,
+    EqualEqual,
+    Bang,
+    BangEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+
     Number(f64),
     Identifier(String),
-    Equals,
     Plus,
     Minus,
     Semicolon,
@@ -59,9 +67,12 @@ fn skip_whitespace(src: &str) -> usize {
 
 fn skip_comment(src: &str) -> usize {
     if src.starts_with("//") {
+        // skip past the terminating newline
         if let Some(x) = src.find('\n') {
             x + 1
-        } else {
+        }
+        // no newline terminator. consume entire line
+        else {
             src.len()
         }
     } else {
@@ -88,8 +99,8 @@ fn skip(src: &str) -> usize {
 fn check_for_keyword(
     src: &str,
     keyword: &str,
-    token: Kind,
-) -> Result<(Kind, usize), Box<dyn Error>> {
+    token: TokenKind,
+) -> Result<(TokenKind, usize), Box<dyn Error>> {
     let k: String = src
         .chars()
         .take_while(|ch| ch.is_ascii_alphabetic())
@@ -102,7 +113,7 @@ fn check_for_keyword(
     }
 }
 
-fn tokenize_identifier(input: &str) -> Result<(Kind, usize), Box<dyn Error>> {
+fn tokenize_identifier(input: &str) -> Result<(TokenKind, usize), Box<dyn Error>> {
     let identifier: String = input
         .chars()
         .take_while(|ch| *ch == '_' || ch.is_ascii_alphanumeric())
@@ -111,17 +122,17 @@ fn tokenize_identifier(input: &str) -> Result<(Kind, usize), Box<dyn Error>> {
     let bytes_read = identifier.len();
 
     let result = if bytes_read == 0 {
-        (Kind::Error("No identifier tokenized".to_string()), 0)
+        (TokenKind::Error("No identifier tokenized".to_string()), 0)
     } else if identifier.starts_with(|ch: char| ch != '_' && !ch.is_ascii_alphabetic()) {
-        (Kind::Error("malformed identifier".to_string()), 0)
+        (TokenKind::Error("malformed identifier".to_string()), 0)
     } else {
-        (Kind::Identifier(identifier), bytes_read)
+        (TokenKind::Identifier(identifier), bytes_read)
     };
 
     Ok(result)
 }
 
-fn tokenize_number(input: &str) -> Result<(Kind, usize), Box<dyn Error>> {
+fn tokenize_number(input: &str) -> Result<(TokenKind, usize), Box<dyn Error>> {
     let mut number: String = input.chars().take_while(|ch| ch.is_ascii_digit()).collect();
     let bytes_read = number.len();
 
@@ -140,45 +151,131 @@ fn tokenize_number(input: &str) -> Result<(Kind, usize), Box<dyn Error>> {
     let bytes_read = number.len();
     let number: f64 = number.parse()?;
 
-    Ok((Kind::Number(number), bytes_read))
+    Ok((TokenKind::Number(number), bytes_read))
 }
 
-fn next_token(src: &str) -> Result<(Kind, usize), Box<dyn Error>> {
-    let cursor = skip(src);
-    let remaining = &src[cursor..];
+fn next_token(src: &str) -> Result<(TokenKind, usize), Box<dyn Error>> {
+    let skipped_bytes = skip(src);
+    let remaining = &src[skipped_bytes..];
+    let mut iterator = remaining.chars();
 
-    let next = match remaining.chars().next() {
+    let next = match iterator.next() {
         Some(x) => x,
-        None => return Ok((Kind::EndOfFile, cursor)),
+        None => return Ok((TokenKind::EndOfFile, skipped_bytes)),
+    };
+
+    let mut relops_match = |true_token: TokenKind, false_token: TokenKind| -> (TokenKind, usize) {
+        if let Some('=') = iterator.next() {
+            (true_token, 2)
+        } else {
+            (false_token, 1)
+        }
     };
 
     let (kind, length) = match next {
-        '=' => (Kind::Equals, 1),
-        '+' => (Kind::Plus, 1),
-        '-' => (Kind::Minus, 1),
-        ';' => (Kind::Semicolon, 1),
+        '+' => (TokenKind::Plus, 1),
+        '-' => (TokenKind::Minus, 1),
+        ';' => (TokenKind::Semicolon, 1),
+
+        // = or ==
+        '=' => relops_match(TokenKind::EqualEqual, TokenKind::Equal),
+        // ! or !=
+        '!' => relops_match(TokenKind::BangEqual, TokenKind::Bang),
+        // < or <=
+        '<' => relops_match(TokenKind::LessEqual, TokenKind::Less),
+        // > or >=
+        '>' => relops_match(TokenKind::GreaterEqual, TokenKind::Greater),
 
         // check for keywords
-        'c' => check_for_keyword(remaining, "class", Kind::Class)?,
-        'e' => check_for_keyword(remaining, "else", Kind::Else)?,
-        'i' => check_for_keyword(remaining, "if", Kind::If)?,
-        'n' => check_for_keyword(remaining, "nil", Kind::Nil)?,
-        'r' => check_for_keyword(remaining, "return", Kind::Return)?,
-        't' => check_for_keyword(remaining, "true", Kind::True)?,
-        'v' => check_for_keyword(remaining, "var", Kind::Var)?,
-        'w' => check_for_keyword(remaining, "while", Kind::While)?,
+        'c' => check_for_keyword(remaining, "class", TokenKind::Class)?,
+        'e' => check_for_keyword(remaining, "else", TokenKind::Else)?,
+        'i' => check_for_keyword(remaining, "if", TokenKind::If)?,
+        'n' => check_for_keyword(remaining, "nil", TokenKind::Nil)?,
+        'r' => check_for_keyword(remaining, "return", TokenKind::Return)?,
+        't' => check_for_keyword(remaining, "true", TokenKind::True)?,
+        'v' => check_for_keyword(remaining, "var", TokenKind::Var)?,
+        'w' => check_for_keyword(remaining, "while", TokenKind::While)?,
 
         d @ '.' | d if d == '.' || d.is_ascii_digit() => tokenize_number(remaining)?,
         _ => tokenize_identifier(remaining)?,
     };
 
-    Ok((kind, length + cursor))
+    Ok((kind, length + skipped_bytes))
 }
 
 #[cfg(test)]
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn relops_test() {
+        // check the relops_match closure within next_token
+        let src = "< <= > >= = == ! !=";
+
+        // check less than
+        let result = next_token(src);
+        assert!(result.is_ok());
+        let (token, bytes) = result.unwrap();
+        assert_eq!(token, TokenKind::Less);
+        assert_eq!(bytes, 1);
+
+        // check less than or equal
+        let src = &src[bytes..];
+        let result = next_token(src);
+        assert!(result.is_ok());
+        let (token, bytes) = result.unwrap();
+        assert_eq!(token, TokenKind::LessEqual);
+        assert_eq!(bytes, 3);
+
+        // check greater than
+        let src = &src[bytes..];
+        let result = next_token(src);
+        assert!(result.is_ok());
+        let (token, bytes) = result.unwrap();
+        assert_eq!(token, TokenKind::Greater);
+        assert_eq!(bytes, 2);
+
+        // check greater than equal
+        let src = &src[bytes..];
+        let result = next_token(src);
+        assert!(result.is_ok());
+        let (token, bytes) = result.unwrap();
+        assert_eq!(token, TokenKind::GreaterEqual);
+        assert_eq!(bytes, 3);
+
+        // check equal
+        let src = &src[bytes..];
+        let result = next_token(src);
+        assert!(result.is_ok());
+        let (token, bytes) = result.unwrap();
+        assert_eq!(token, TokenKind::Equal);
+        assert_eq!(bytes, 2);
+
+        // check equal equal
+        let src = &src[bytes..];
+        let result = next_token(src);
+        assert!(result.is_ok());
+        let (token, bytes) = result.unwrap();
+        assert_eq!(token, TokenKind::EqualEqual);
+        assert_eq!(bytes, 3);
+
+        // check bang
+        let src = &src[bytes..];
+        let result = next_token(src);
+        assert!(result.is_ok());
+        let (token, bytes) = result.unwrap();
+        assert_eq!(token, TokenKind::Bang);
+        assert_eq!(bytes, 2);
+
+        // check bang equal.. not equal
+        let src = &src[bytes..];
+        let result = next_token(src);
+        assert!(result.is_ok());
+        let (token, bytes) = result.unwrap();
+        assert_eq!(token, TokenKind::BangEqual);
+        assert_eq!(bytes, 3);
+    }
 
     #[test]
     fn skip_test() {
@@ -285,14 +382,17 @@ mod tests {
         let result = tokenize_identifier(src);
         assert!(result.is_ok());
         let (token, _) = result.unwrap();
-        assert_eq!(Kind::Error("No identifier tokenized".to_string()), token);
+        assert_eq!(
+            TokenKind::Error("No identifier tokenized".to_string()),
+            token
+        );
 
         // test malformed identifier
         let src = "10ten";
         let result = tokenize_identifier(src);
         assert!(result.is_ok());
         let (token, _) = result.unwrap();
-        assert_eq!(Kind::Error("malformed identifier".to_string()), token);
+        assert_eq!(TokenKind::Error("malformed identifier".to_string()), token);
 
         // scans good part of identifier
         let src = "test@1234";
@@ -307,7 +407,7 @@ mod tests {
 
         let result = next_token(remaining);
         assert!(result.is_ok());
-        let tuple = (Kind::Identifier("C".to_string()), 1);
+        let tuple = (TokenKind::Identifier("C".to_string()), 1);
         let remaining = &remaining[result.unwrap().1..];
         println!("remaining: {}", remaining);
         // assert_eq!(Ok(tuple), result);
