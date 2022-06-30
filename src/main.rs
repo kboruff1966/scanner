@@ -17,4 +17,7 @@ fn main() {
     println!("{}", x);
 
     println!("lets do another modification");
+
+    // adding new print statement
+    println!("howdy ho");
 }
