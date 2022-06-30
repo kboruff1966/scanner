@@ -15,4 +15,7 @@ fn main() {
 
     let x = 0123;
     println!("{}", x);
+
+    // adding new print statement
+    println!("howdy ho");
 }
